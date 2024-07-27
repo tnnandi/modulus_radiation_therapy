@@ -136,10 +136,13 @@ def run(cfg: ModulusConfig) -> None:
 
     # Interior inferencer
     inference_times = [0.0, 2.5, 5.0]
-    inference_Ds = [0.01, 0.1, 0.8]
+    inference_Ds = [0.1, 0.4, 0.8]
+    # D_mapping = {0.01: "0p01", 0.1: "0p1", 0.8: "0p8"}
 
     interior_points = interior_mesh.sample_interior(cfg.batch_size.interior)
+    time_index = 0
     for time_value in inference_times:
+        D_index = 0
         for D_value in inference_Ds:
             # print(D_value, type(D_value))
             invar = {
@@ -155,11 +158,9 @@ def run(cfg: ModulusConfig) -> None:
                 output_names=["N"],
                 batch_size=cfg.batch_size.interior,
             )
-            # inferencer_name = f"tumor_inferencer_t_{time_value}_D_{D_value}"
-            inferencer_name = "tumor_inferencer_t_{:.1f}_D_{:05.2f}".format(time_value, D_value)
-            print(inferencer_name)
-            domain.add_inferencer(interior_inferencer, inferencer_name)
-
+            domain.add_inferencer(interior_inferencer, "Inference" + "_t_" + str(time_index) + "_D_" + str(D_index))
+            D_index += 1
+        time_index += 1
     # make solver
     slv = Solver(cfg, domain)
 

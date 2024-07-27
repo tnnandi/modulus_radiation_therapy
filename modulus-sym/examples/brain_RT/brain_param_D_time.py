@@ -81,11 +81,16 @@ def run(cfg: ModulusConfig) -> None:
     # or can add a Sigmoid activation after the final layer of the NN
     tumor_diffusion_eq = Diffusion(T="N", D=D_symbol, dim=3, time=True) # the diffsuion equation will be solved for "N": the normalized tumor density
 
+    # override defaults
+    cfg.arch.fully_connected.layer_size = 128
+    cfg.arch.fully_connected.nr_layers = 4
+    # cfg.arch.fully_connected.activation_fn = [torch.nn.ReLU()] * 3 + [torch.nn.Sigmoid()]
+
     tumor_net = instantiate_arch(
         input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("D")],  # add "D" and "t" as additional input (parameterized)
         output_keys=[Key("N")],
         cfg=cfg.arch.fully_connected,
-        activation_fn=torch.nn.Sigmoid() # to constrain N between 0 and 1
+        # activation_fn=torch.nn.Sigmoid() # to constrain N between 0 and 1
     )
 
     nodes = (
@@ -139,7 +144,7 @@ def run(cfg: ModulusConfig) -> None:
     inference_Ds = [0.1, 0.4, 0.8]
     # D_mapping = {0.01: "0p01", 0.1: "0p1", 0.8: "0p8"}
 
-    interior_points = interior_mesh.sample_interior(cfg.batch_size.interior)
+    interior_points = interior_mesh.sample_interior(cfg.batch_size.inference)
     time_index = 0
     for time_value in inference_times:
         D_index = 0
@@ -156,7 +161,7 @@ def run(cfg: ModulusConfig) -> None:
                 nodes=nodes,
                 invar=invar,
                 output_names=["N"],
-                batch_size=cfg.batch_size.interior,
+                batch_size=cfg.batch_size.inference,
             )
             domain.add_inferencer(interior_inferencer, "Inference" + "_t_" + str(time_index) + "_D_" + str(D_index))
             D_index += 1

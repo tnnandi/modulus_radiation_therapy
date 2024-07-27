@@ -1,0 +1,15 @@
+{
+  "copyright_file": "copyright.txt",
+  "dir": "../../",
+  "exclude-dir": [
+      "../../docs/",
+      "../../deps/"
+    ],
+  "include-ext": [
+      ".py",
+      ".yaml",
+      ".ci",
+      ".release",
+      "Dockerfile"
+  ]
+}

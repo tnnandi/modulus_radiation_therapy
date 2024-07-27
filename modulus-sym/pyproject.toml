@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nvidia-modulus.sym"
+authors = [
+  { name="NVIDIA Modulus Team"},
+]
+description = "A deep learning framework for AI-driven multi-physics systems"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache 2.0"}
+dependencies = [
+    "nvidia-modulus>=0.2.0",
+    "hydra-core>=1.2.0",
+    "termcolor>=2.1.1",
+    "chaospy>=4.3.7",
+    "Cython==0.29.28",
+    "numpy-stl==2.16.3",
+    "opencv-python==4.9.0.80",
+    "scikit-learn>=1.2.0",
+    "symengine>=0.10.0",
+    "sympy==1.12",
+    "timm>=1.0.3",
+    "torch-optimizer==0.3.0",
+    "transforms3d==0.3.1",
+    "typing==3.7.4.3",
+    "pillow==10.2.0",
+    "notebook==6.4.12",
+    "mistune==2.0.3",
+    "pint==0.19.2",
+    "tensorboard>=2.8.0",
+    "vtk>=9.2.6",
+    "h5py>=3.7.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "modulus.sym.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["modulus.*"] 
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]

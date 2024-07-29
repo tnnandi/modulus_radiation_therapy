@@ -12,6 +12,7 @@ Note: Step 4 needs to be carried out within a singularity shell for Nvidia's Mod
 ## Implementation of the governing equations
 
 The equation for the tumor growth and response to radiation is given by:
+$\frac{a}{b}$
 
 $$
 \frac{\partial \hat{N}_T(x,t)}{\partial t} = \underbrace{\nabla \cdot (D_T \nabla \hat{N}_T(x,t))}_{\text{Diffusion}} + \underbrace{k_{p,T} \hat{N}_T(x,t) \left(1 - \frac{\hat{N}_T(x,t)}{\theta_T} \right)}_{\text{Proliferation}}

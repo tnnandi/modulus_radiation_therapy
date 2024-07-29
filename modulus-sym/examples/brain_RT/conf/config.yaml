@@ -36,3 +36,4 @@ batch_size:
   no_slip: 5000
   interior: 20000
   initial_condition: 10000
+  inference: 1000000

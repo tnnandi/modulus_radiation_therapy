@@ -26,6 +26,7 @@ from modulus.sym.eq.pdes.basic import NormalDotVec
 from modulus.sym.utils.io import csv_to_dict
 from modulus.sym.geometry.tessellation import Tessellation
 
+# use "mpirun -np 4 python brain_param_D_time.py"
 
 @modulus.sym.main(config_path="conf", config_name="config")
 def run(cfg: ModulusConfig) -> None:

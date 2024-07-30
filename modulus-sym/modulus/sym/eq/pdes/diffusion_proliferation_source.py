@@ -51,17 +51,17 @@ class DiffusionProliferationSource(PDE):
 
     Examples
     ========
-    >>> diff = Diffusion(D=0.1, Q=1, dim=2)
+    >>> diff = DiffusionProliferationSource(D=0.1, Q=1, dim=2)
     >>> diff.pprint()
       diffusion_T: T__t - 0.1*T__x__x - 0.1*T__y__y - 1
-    >>> diff = Diffusion(T='u', D='D', Q='Q', dim=3, time=False)
+    >>> diff = DiffusionProliferationSource(T='u', D='D', Q='Q', dim=3, time=False)
     >>> diff.pprint()
       diffusion_u: -D*u__x__x - D*u__y__y - D*u__z__z - Q - D__x*u__x - D__y*u__y - D__z*u__z
     """
 
     name = "DiffusionProliferationSource"
 
-    def __init__(self, T="T", D="D", Q=0, dim=3, time=True, mixed_form=False):
+    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", dim=3, time=True, mixed_form=False):
         # set params
         self.T = T
         self.dim = dim
@@ -100,6 +100,18 @@ class DiffusionProliferationSource(PDE):
         elif type(Q) in [float, int]:
             Q = Number(Q)
 
+        # Proliferation rate
+        if type(k_p) is str:
+            k_p = Function(k_p)(*input_variables)
+        elif type(k_p) in [float, int]:
+            k_p = Number(k_p)
+
+        # Carrying capacity
+        if type(theta) is str:
+            theta = Function(theta)(*input_variables)
+        elif type(theta) in [float, int]:
+            theta = Number(theta)
+
         # set equations
         self.equations = {}
 
@@ -109,6 +121,7 @@ class DiffusionProliferationSource(PDE):
                 - (D * T.diff(x)).diff(x)
                 - (D * T.diff(y)).diff(y)
                 - (D * T.diff(z)).diff(z)
+                + k_p * T * (1 - T / theta)
                 - Q
             )
         elif self.mixed_form:
@@ -124,6 +137,7 @@ class DiffusionProliferationSource(PDE):
                 - (D * T_x).diff(x)
                 - (D * T_y).diff(y)
                 - (D * T_z).diff(z)
+                + k_p * T * (1 - T / theta)
                 - Q
             )
             self.equations["compatibility_T_x"] = T.diff(x) - T_x

@@ -19,16 +19,24 @@ from modulus.sym.domain.validator import PointwiseValidator
 from modulus.sym.domain.inferencer import PointwiseInferencer
 from modulus.sym.domain.monitor import PointwiseMonitor
 from modulus.sym.key import Key
-from modulus.sym.eq.pdes.navier_stokes import NavierStokes
-from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
+# from modulus.sym.eq.pdes.navier_stokes import NavierStokes
+# from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
 from modulus.sym.eq.pdes.diffusion import Diffusion
-from modulus.sym.eq.pdes.diffusion_proliferation_source import DiffusionProliferationSource
 from modulus.sym.eq.pdes.basic import NormalDotVec
 from modulus.sym.utils.io import csv_to_dict
 from modulus.sym.geometry.tessellation import Tessellation
 
 # cd /mnt/Modulus_24p04/modulus-sym/examples/brain_RT
 # use "mpirun -np 4 python brain_param_D_time.py"
+
+import sys
+# print(sys.path)
+# sys.path.append('/mnt/Modulus_24p04/modulus-sym/modulus/sym/eq/pdes')
+# sys.path.append('/mnt/Modulus_24p04/modulus-sym/writable_dir/lib/python3.10/site-packages')
+# from modulus.sym.eq.pdes.diffusion_proliferation_source import DiffusionProliferationSource
+
+# for now, importing it from a file in the same dir due to pip install issues for the eq/pdes dir
+from diffusion_proliferation_source import DiffusionProliferationSource
 
 @modulus.sym.main(config_path="conf", config_name="config")
 def run(cfg: ModulusConfig) -> None:
@@ -53,6 +61,10 @@ def run(cfg: ModulusConfig) -> None:
     scale = 1 # keep dims in mm # 1e-3 # dimensions are in mm
     noslip_mesh.scale(scale)
     interior_mesh.scale(scale)
+
+    # proliferation rate and carrying capacity
+    k_p_value = 0.5
+    theta_value = 0.5
 
     print("Bounds after scaling")
     print(noslip_mesh.bounds)
@@ -82,7 +94,12 @@ def run(cfg: ModulusConfig) -> None:
 
     # Need to reformulate N so that it is the normalized tumor density and is between 0 and 1
     # or can add a Sigmoid activation after the final layer of the NN
-    tumor_diffusion_proliferation_source_eq = DiffusionProliferationSource(T="N", D=D_symbol, dim=3, time=True) # the equation will be solved for "N": the normalized tumor density
+    tumor_diffusion_proliferation_source_eq = DiffusionProliferationSource(T="N",
+                                                                           D=D_symbol,
+                                                                           k_p=k_p_value,
+                                                                           theta=theta_value,
+                                                                           dim=3,
+                                                                           time=True) # the equation will be solved for "N": the normalized tumor density
 
     # override defaults
     cfg.arch.fully_connected.layer_size = 128
@@ -117,7 +134,7 @@ def run(cfg: ModulusConfig) -> None:
     interior = PointwiseInteriorConstraint(
         nodes=nodes,
         geometry=interior_mesh,
-        outvar={"diffusion_N": 0}, # can add a source term
+        outvar={"diffusion_proliferation_source_N": 0}, # can add a source term
         batch_size=cfg.batch_size.interior,
         parameterization=param_ranges,
     )

@@ -22,10 +22,12 @@ from modulus.sym.key import Key
 from modulus.sym.eq.pdes.navier_stokes import NavierStokes
 from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
 from modulus.sym.eq.pdes.diffusion import Diffusion
+from modulus.sym.eq.pdes.diffusion_proliferation_source import DiffusionProliferationSource
 from modulus.sym.eq.pdes.basic import NormalDotVec
 from modulus.sym.utils.io import csv_to_dict
 from modulus.sym.geometry.tessellation import Tessellation
 
+# cd /mnt/Modulus_24p04/modulus-sym/examples/brain_RT
 # use "mpirun -np 4 python brain_param_D_time.py"
 
 @modulus.sym.main(config_path="conf", config_name="config")
@@ -80,7 +82,7 @@ def run(cfg: ModulusConfig) -> None:
 
     # Need to reformulate N so that it is the normalized tumor density and is between 0 and 1
     # or can add a Sigmoid activation after the final layer of the NN
-    tumor_diffusion_eq = Diffusion(T="N", D=D_symbol, dim=3, time=True) # the diffsuion equation will be solved for "N": the normalized tumor density
+    tumor_diffusion_proliferation_source_eq = DiffusionProliferationSource(T="N", D=D_symbol, dim=3, time=True) # the equation will be solved for "N": the normalized tumor density
 
     # override defaults
     cfg.arch.fully_connected.layer_size = 128
@@ -95,7 +97,7 @@ def run(cfg: ModulusConfig) -> None:
     )
 
     nodes = (
-            tumor_diffusion_eq.make_nodes()
+            tumor_diffusion_proliferation_source_eq.make_nodes()
             + [tumor_net.make_node(name="flow_network")]
     )
 

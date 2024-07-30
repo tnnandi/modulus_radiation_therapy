@@ -29,24 +29,25 @@ Note: Step 4 needs to be carried out within a singularity shell for Nvidia's Mod
 
 ## Implementation of the governing equations
 
-The single-species model for tumor growth and response to radiation is given by:
-$\frac{\partial \hat{N}_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla \hat{N}_T(x,t)) + \kappa\hat{N}_T(x,t)(1 - \frac{\hat{N}_T(x,t)}{\theta_T}) + R$
+### Tumor growth equation without the treatment term included
+The single-species model for tumor growth is given by:\
+$\frac{\partial \hat{N}_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla \hat{N}_T(x,t)) + \kappa_T\hat{N}_T(x,t)(1 - \frac{\hat{N}_T(x,t)}{\theta_T})$
 
 where the terms on the LHS represented the temporal evolution of the normalized tumor density $\hat{N}$. The first and the second terms on the RHS represent diffusion and proliferation, respectively. 
-$R$ represents the response to radiation therapy (and chemotherapy, if present) term. 
+
 
 ${N}_T(x,t)$: Normalized tumor density \
 $D_T$: Tumor cell diffusion coefficient \
-$\kappa$: Tumor cell proliferation rate \
-$\theta_T$: Carrying capacity of the tumor \
+$\kappa_T$: Tumor cell proliferation rate \
+$\theta_T$: Carrying capacity of the tumor 
 
-The normalized tumor density following the treatment event is given by:
+### Treatment response model
+The response to radiotherapy (RT) and chemotherapy (CT) is modeled as a discrete event:
 
-$$
-\hat{N}_{i,\text{post}}(x,t) = \hat{N}_{i,\text{pre}}(x,t) \text{SF}_{\text{RT+CT}}(x,t), 
-$$
-
-where the normalized tumor density following the treatment event, $\hat{N}_{i,\text{post}}$, was assigned to the product of the pre-treatment normalized tumor density, $\hat{N}_{i,\text{pre}}$, and the surviving fractions of cells due to a single dose of combined radiotherapy and chemotherapy, $\text{SF}_{\text{RT+CT}}$. 
+```math
+\hat{N}_{i,\text{post}}(x,t) = \hat{N}_{i,\text{pre}}(x,t) \text{SF}_{\text{RT+CT}}(x,t)$
+```
+where the surviving fractions of cells due to a single dose of combined radiotherapy and chemotherapy is given by: 
 
 $$
 \text{SF}_{\text{RT+CT}}(x,t) = e^{-\alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta} \right)}, 
@@ -54,7 +55,25 @@ $$
 
 where $\alpha$ is a treatment sensitivity term, $\text{Dose}(x,t)$ is the dose of RT+CT given in a single fraction, and $\alpha/\beta$ is the ratio of the linear and quadratic sensitivity terms set to a fixed value of 5.6 Gy.
 
+### Modified tumor evolution equation with the treatment term included
+
+The reduction in tumor density due to treatment can be modeled as a decay term proportional to the tumor density and the treatment dose:
+```math
+\frac{dN_T(x,t)}{dt}\bigg|_{\text{treatment}} = -N_T(x,t) \cdot \alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta}\right)
+```
+
+Thus, the full governing equation including the treatment response term is:
+
+```math
+\frac{\partial N_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla N_T(x,t)) + k_p T N_T(x,t) \left(1 - \frac{N_T(x,t)}{\theta_T}\right) - \alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta}\right) N_T(x,t)
+```
+Note 1: Currently, the PINN model is being setup without the treatment response term for debugging purposes.
+
+Note 2: Further complexities can be introduced by 
+- solving separate transport equations for the enhancing and non-enhancing parts of the tumor withe competition term included 
+- making the diffusion coefficient spatially and temporally varying to more accurately represent areas of hypoxia and angiogenesis, and the tumor microenvironment 
 ## Assignment of physical parameters and the parameterized quantities
 
-
+List of relevant parameterized quantities and their represnetative ranges (from David and Caroline)
+![img.png](img.png)
 

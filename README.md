@@ -23,7 +23,7 @@ parameter-specific computer simulations.
 1. View brain cross sections from MRI scans using [view_mat_interactive_all.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/view_mat_interactive_all.py) to ensure the geometry is well represented for meshing
 2. Generate surface mesh (STL) from the cross sections using [convert_to_stl_surface_use_gmsh_volume.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/convert_to_stl_surface_use_gmsh_volume.py) 
 3. Generate volume mesh (STL) from the surface mesh using [gmsh](https://gmsh.info/). Generated meshes for a single patient are available at [Box](https://anl.box.com/s/tlyfb74wyuma0jm4zha8zfrwcspxshlb)
-4. Edit governing equation/s at [diffusion_proliferation_source.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/modulus/sym/eq/pdes/diffusion_proliferation_source.py)
+4. Edit governing equation/s at [diffusion_proliferation_source.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/diffusion_proliferation_source.py). Ideally, this should be in /eq/pdes dir, need to fix installation issues within the singularity shell.
 4. Execute [brain_param_D_time.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/brain_param_D_time.py) using "mpirun -np <num_gpus> python brain_param_D_time.py" to begin PINN training. 
    - Edit the NN configuration, fixed physical properties, ICs/BCs and the parameterized variables as required.
    - The diffusion coefficient is considered as parameterized with values ranging from 0.1 to 0.8 $mm^2/day$.
@@ -71,7 +71,7 @@ Thus, the full governing equation including the treatment response term is:
 ```math
 \frac{\partial N_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla N_T(x,t)) + k_p N_T(x,t) \left(1 - \frac{N_T(x,t)}{\theta_T}\right) - \alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta}\right) N_T(x,t)
 ```
-Note 1: Currently, the PINN model is being setup without the treatment response term for debugging purposes. The equation is implemented in [diffusion_proliferation_source.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/modulus/sym/eq/pdes/diffusion_proliferation_source.py). The diffusion coefficient is considered as parameterized with values ranging from 0.1 to 0.8 $mm^2/day$
+Note 1: Currently, the PINN model is being setup without the treatment response term for debugging purposes. The equation is implemented in [diffusion_proliferation_source.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/diffusion_proliferation_source.py). The diffusion coefficient is considered as parameterized with values ranging from 0.1 to 0.8 $mm^2/day$
 
 Note 2: Further complexities can be introduced by 
 - solving separate transport equations for the enhancing and non-enhancing parts of the tumor withe competition term included 

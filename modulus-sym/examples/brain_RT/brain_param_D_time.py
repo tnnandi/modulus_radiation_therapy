@@ -1,7 +1,10 @@
 import os
 import warnings
 from pdb import set_trace
+from typing import Optional, Dict, Tuple, Union, List
+from modulus.sym.key import Key
 import torch
+from torch import Tensor
 import torch.nn as nn
 import numpy as np
 from sympy import Symbol, sqrt, Max, Eq
@@ -25,8 +28,13 @@ from modulus.sym.node import Node
 # from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
 from modulus.sym.eq.pdes.diffusion import Diffusion
 from modulus.sym.eq.pdes.basic import NormalDotVec
+from modulus.sym.eq.pdes.basic import GradNormal
 from modulus.sym.utils.io import csv_to_dict
 from modulus.sym.geometry.tessellation import Tessellation
+
+from modulus.models.layers import FCLayer, Conv1dFCLayer
+from modulus.sym.models.activation import Activation, get_activation_fn
+from modulus.sym.models.arch import Arch
 
 # cd /mnt/Modulus_24p04/modulus-sym/examples/brain_RT
 # use "mpirun -np 4 python brain_param_D_time.py"
@@ -39,6 +47,224 @@ import sys
 
 # for now, importing it from a file in the same dir due to pip install issues for the eq/pdes dir
 from diffusion_proliferation_source import DiffusionProliferationSource
+
+
+def count_trainable_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+# Custom architecture classes to add Sigmoid activation after the final NN layer (codes adapted from sym/models/fully_connected.py)
+class FullyConnectedArchCore(nn.Module):
+    def __init__(
+            self,
+            in_features: int = 512,
+            layer_size: int = 512,
+            out_features: int = 512,  # default value, the actual value will be based on length of output_keys
+            nr_layers: int = 6,
+            skip_connections: bool = False,
+            activation_fn: Activation = Activation.SILU,
+            adaptive_activations: bool = False,
+            weight_norm: bool = True,
+            conv_layers: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.skip_connections = skip_connections
+
+        if conv_layers:
+            fc_layer = Conv1dFCLayer
+        else:
+            fc_layer = FCLayer
+
+        if adaptive_activations:
+            activation_par = nn.Parameter(torch.ones(1))
+        else:
+            activation_par = None
+
+        if not isinstance(activation_fn, list):
+            activation_fn = [activation_fn] * nr_layers
+        if len(activation_fn) < nr_layers:
+            activation_fn = activation_fn + [activation_fn[-1]] * (
+                    nr_layers - len(activation_fn)
+            )
+
+        self.layers = nn.ModuleList()
+
+        layer_in_features = in_features
+        for i in range(nr_layers):
+            self.layers.append(
+                fc_layer(
+                    in_features=layer_in_features,
+                    out_features=layer_size,
+                    activation_fn=get_activation_fn(
+                        activation_fn[i], out_features=out_features
+                    ),
+                    weight_norm=weight_norm,
+                    activation_par=activation_par,
+                )
+            )
+            layer_in_features = layer_size
+
+        # modify the final layer to include a Sigmoid activation to constrain N between 0 and 1
+        self.final_layer = nn.Sequential(
+            fc_layer(
+                in_features=layer_size,
+                out_features=out_features,
+                activation_fn=None,
+                weight_norm=False,
+                activation_par=None,
+            ),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x_skip: Optional[Tensor] = None
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if self.skip_connections and i % 2 == 0:
+                if x_skip is not None:
+                    x, x_skip = x + x_skip, x
+                else:
+                    x_skip = x
+
+        x = self.final_layer(x)
+        return x
+
+    def get_weight_list(self):
+        weights = [layer.conv.weight for layer in self.layers] + [
+            self.final_layer[0].conv.weight  # Accessing the actual linear layer within the Sequential
+        ]
+        biases = [layer.conv.bias for layer in self.layers] + [
+            self.final_layer[0].conv.bias  # Accessing the actual linear layer within the Sequential
+        ]
+        return weights, biases
+
+
+class FullyConnectedArch(Arch):
+    def __init__(
+            self,
+            input_keys: List[Key],
+            output_keys: List[Key],
+            detach_keys: List[Key] = [],
+            layer_size: int = 512,
+            nr_layers: int = 6,
+            activation_fn=Activation.SILU,
+            periodicity: Union[Dict[str, Tuple[float, float]], None] = None,
+            skip_connections: bool = False,
+            adaptive_activations: bool = False,
+            weight_norm: bool = True,
+    ) -> None:
+        super().__init__(
+            input_keys=input_keys,
+            output_keys=output_keys,
+            detach_keys=detach_keys,
+            periodicity=periodicity,
+        )
+
+        if self.periodicity is not None:
+            in_features = sum(
+                [
+                    x.size
+                    for x in self.input_keys
+                    if x.name not in list(periodicity.keys())
+                ]
+            ) + +sum(
+                [
+                    2 * x.size
+                    for x in self.input_keys
+                    if x.name in list(periodicity.keys())
+                ]
+            )
+        else:
+            in_features = sum(self.input_key_dict.values())
+        out_features = sum(self.output_key_dict.values())
+
+        self._impl = FullyConnectedArchCore(
+            in_features,
+            layer_size,
+            out_features,
+            nr_layers,
+            skip_connections,
+            activation_fn,
+            adaptive_activations,
+            weight_norm,
+        )
+
+    def _tensor_forward(self, x: Tensor) -> Tensor:
+        x = self.process_input(
+            x,
+            self.input_scales_tensor,
+            periodicity=self.periodicity,
+            input_dict=self.input_key_dict,
+            dim=-1,
+        )
+        x = self._impl(x)
+        x = self.process_output(x, self.output_scales_tensor)
+        return x
+
+    def forward(self, in_vars: Dict[str, Tensor]) -> Dict[str, Tensor]:
+        x = self.concat_input(
+            in_vars,
+            self.input_key_dict.keys(),
+            detach_dict=self.detach_key_dict,
+            dim=-1,
+        )
+        y = self._tensor_forward(x)
+        return self.split_output(y, self.output_key_dict, dim=-1)
+
+    def _dict_forward(self, in_vars: Dict[str, Tensor]) -> Dict[str, Tensor]:
+        x = self.prepare_input(
+            in_vars,
+            self.input_key_dict.keys(),
+            detach_dict=self.detach_key_dict,
+            dim=-1,
+            input_scales=self.input_scales,
+            periodicity=self.periodicity,
+        )
+        y = self._impl(x)
+        return self.prepare_output(
+            y, self.output_key_dict, dim=-1, output_scales=self.output_scales
+        )
+
+
+class CustomFullyConnectedArch(FullyConnectedArch):
+    def __init__(
+            self,
+            input_keys: List[Key],
+            output_keys: List[Key],
+            detach_keys: List[Key] = [],
+            layer_size: int = 512,
+            nr_layers: int = 6,
+            activation_fn=Activation.SILU,
+            periodicity: Union[Dict[str, Tuple[float, float]], None] = None,
+            skip_connections: bool = False,
+            adaptive_activations: bool = False,
+            weight_norm: bool = True,
+    ) -> None:
+        super().__init__(
+            input_keys=input_keys,
+            output_keys=output_keys,
+            detach_keys=detach_keys,
+            layer_size=layer_size,
+            nr_layers=nr_layers,
+            activation_fn=activation_fn,
+            periodicity=periodicity,
+            skip_connections=skip_connections,
+            adaptive_activations=adaptive_activations,
+            weight_norm=weight_norm,
+        )
+
+        # Use the custom core with the original output features
+        self._impl = FullyConnectedArchCore(
+            in_features=sum(self.input_key_dict.values()),
+            layer_size=layer_size,
+            out_features=sum(self.output_key_dict.values()),
+            nr_layers=nr_layers,
+            skip_connections=skip_connections,
+            activation_fn=activation_fn,
+            adaptive_activations=adaptive_activations,
+            weight_norm=weight_norm,
+        )
 
 
 @modulus.sym.main(config_path="conf", config_name="config")
@@ -108,25 +334,39 @@ def run(cfg: ModulusConfig) -> None:
     cfg.arch.fully_connected.layer_size = 128
     cfg.arch.fully_connected.nr_layers = 4
 
-    tumor_net = instantiate_arch(
-        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("D")],
-        # add "D" and "t" as additional input (parameterized)
-        output_keys=[Key("N")],
-        cfg=cfg.arch.fully_connected,
+    input_keys = [Key("x"), Key("y"), Key("z"), Key("t"), Key("D")]
+    output_keys = [Key("N")]
+
+    # Use the custom architecture class
+    tumor_net = CustomFullyConnectedArch(
+        input_keys=input_keys,
+        output_keys=output_keys,
+        layer_size=cfg.arch.fully_connected.layer_size,
+        nr_layers=cfg.arch.fully_connected.nr_layers,
     )
+
+    for i in range(10):
+        print("########################################################")
+    # Print the total number of trainable parameters
+    total_params = count_trainable_params(tumor_net)
+    print(f"Total number of trainable parameters: {total_params}")
+
+    grad_normal_N = GradNormal("N", dim=3)
 
     nodes = (
             tumor_diffusion_proliferation_source_eq.make_nodes()
             + [tumor_net.make_node(name="flow_network")]
+            + grad_normal_N.make_nodes()
     )
 
     # add constraints to solver
 
-    # no slip
+    # farfield BC (surface boundary of the brain)
     farfield = PointwiseBoundaryConstraint(
         nodes=nodes,
         geometry=farfield_mesh,
-        outvar={"N": 0},  # should set the gradient to zero
+        # outvar={"N": 0},
+        outvar={"normal_gradient_N": 0}, # set the surface normal gradient of N to zero
         batch_size=cfg.batch_size.farfield,
         parameterization=param_ranges
     )

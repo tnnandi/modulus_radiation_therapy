@@ -2,6 +2,7 @@ import os
 import warnings
 from pdb import set_trace
 import torch
+import torch.nn as nn
 import numpy as np
 from sympy import Symbol, sqrt, Max, Eq
 # from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_wandb
@@ -19,6 +20,7 @@ from modulus.sym.domain.validator import PointwiseValidator
 from modulus.sym.domain.inferencer import PointwiseInferencer
 from modulus.sym.domain.monitor import PointwiseMonitor
 from modulus.sym.key import Key
+from modulus.sym.node import Node
 # from modulus.sym.eq.pdes.navier_stokes import NavierStokes
 # from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
 from modulus.sym.eq.pdes.diffusion import Diffusion
@@ -38,12 +40,13 @@ import sys
 # for now, importing it from a file in the same dir due to pip install issues for the eq/pdes dir
 from diffusion_proliferation_source import DiffusionProliferationSource
 
+
 @modulus.sym.main(config_path="conf", config_name="config")
 def run(cfg: ModulusConfig) -> None:
     # read stl files to make geometry
     point_path = to_absolute_path("./stl_files")
 
-    noslip_mesh = Tessellation.from_stl(
+    farfield_mesh = Tessellation.from_stl(
         point_path + "/brain_surface_subsample_4X.stl", airtight=False
     )
 
@@ -53,13 +56,13 @@ def run(cfg: ModulusConfig) -> None:
 
     # Mesh bounds
     print("Bounds before scaling")
-    print(noslip_mesh.bounds)
+    print(farfield_mesh.bounds)
     print(interior_mesh.bounds)
     # bound_ranges: {x: (51.0, 239.0), y: (57.0, 197.0), z: (9.25, 109.25)} param_ranges: {}
     # bound_ranges: {x: (51.0, 239.0), y: (57.0, 197.0), z: (9.25, 109.25)} param_ranges: {}
 
-    scale = 1 # keep dims in mm # 1e-3 # dimensions are in mm
-    noslip_mesh.scale(scale)
+    scale = 1  # keep dims in mm # 1e-3 # dimensions are in mm
+    farfield_mesh.scale(scale)
     interior_mesh.scale(scale)
 
     # proliferation rate and carrying capacity
@@ -67,7 +70,7 @@ def run(cfg: ModulusConfig) -> None:
     theta_value = 0.5
 
     print("Bounds after scaling")
-    print(noslip_mesh.bounds)
+    print(farfield_mesh.bounds)
     print(interior_mesh.bounds)
 
     # set_trace()
@@ -79,7 +82,7 @@ def run(cfg: ModulusConfig) -> None:
     # for now, using the continuous time approach (later, we can move to moving window approach for time evolution over larger durations)
     # parameterized time
     time_symbol = Symbol("t")
-    time_range = (0.0, 5.0) # in days
+    time_range = (0.0, 5.0)  # in days
 
     # parameterized diffusion coefficient
     D_symbol = Symbol("D")
@@ -99,18 +102,17 @@ def run(cfg: ModulusConfig) -> None:
                                                                            k_p=k_p_value,
                                                                            theta=theta_value,
                                                                            dim=3,
-                                                                           time=True) # the equation will be solved for "N": the normalized tumor density
+                                                                           time=True)  # the equation will be solved for "N": the normalized tumor density
 
     # override defaults
     cfg.arch.fully_connected.layer_size = 128
     cfg.arch.fully_connected.nr_layers = 4
-    # cfg.arch.fully_connected.activation_fn = [torch.nn.ReLU()] * 3 + [torch.nn.Sigmoid()]
 
     tumor_net = instantiate_arch(
-        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("D")],  # add "D" and "t" as additional input (parameterized)
+        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("D")],
+        # add "D" and "t" as additional input (parameterized)
         output_keys=[Key("N")],
         cfg=cfg.arch.fully_connected,
-        # activation_fn=torch.nn.Sigmoid() # to constrain N between 0 and 1
     )
 
     nodes = (
@@ -121,20 +123,20 @@ def run(cfg: ModulusConfig) -> None:
     # add constraints to solver
 
     # no slip
-    no_slip = PointwiseBoundaryConstraint(
+    farfield = PointwiseBoundaryConstraint(
         nodes=nodes,
-        geometry=noslip_mesh,
-        outvar={"N": 0},
-        batch_size=cfg.batch_size.no_slip,
+        geometry=farfield_mesh,
+        outvar={"N": 0},  # should set the gradient to zero
+        batch_size=cfg.batch_size.farfield,
         parameterization=param_ranges
     )
-    domain.add_constraint(no_slip, "no_slip")
+    domain.add_constraint(farfield, "farfield")
 
     # interior
     interior = PointwiseInteriorConstraint(
         nodes=nodes,
         geometry=interior_mesh,
-        outvar={"diffusion_proliferation_source_N": 0}, # can add a source term
+        outvar={"diffusion_proliferation_source_N": 0},  # can add a source term
         batch_size=cfg.batch_size.interior,
         parameterization=param_ranges,
     )
@@ -151,11 +153,12 @@ def run(cfg: ModulusConfig) -> None:
     initial_condition = PointwiseInteriorConstraint(
         nodes=nodes,
         geometry=interior_mesh,
-        outvar={"N": initial_tumor_density}, # representing the initial tumor using a gaussian distribution centered around a specific location
+        outvar={"N": initial_tumor_density},
+        # representing the initial tumor using a gaussian distribution centered around a specific location
         # outvar={"N": 0},
-        batch_size=cfg.batch_size.initial_condition, # 10
+        batch_size=cfg.batch_size.initial_condition,  # 10
         lambda_weighting={"N": 1.0},
-        parameterization={D_symbol: D_range_mm2_day, time_symbol: 0} # fix t=0
+        parameterization={D_symbol: D_range_mm2_day, time_symbol: 0}  # fix t=0
     )
     domain.add_constraint(initial_condition, "initial_condition")
 

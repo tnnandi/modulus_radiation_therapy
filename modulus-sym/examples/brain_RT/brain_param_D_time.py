@@ -1,5 +1,6 @@
 import os
 import warnings
+import wandb
 from pdb import set_trace
 from typing import Optional, Dict, Tuple, Union, List
 from modulus.sym.key import Key
@@ -48,6 +49,7 @@ import sys
 # for now, importing it from a file in the same dir due to pip install issues for the eq/pdes dir
 from diffusion_proliferation_source import DiffusionProliferationSource
 
+# wandb.init(project="modulus_brain_RT", entity='tnnandi')
 
 def count_trainable_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -337,14 +339,20 @@ def run(cfg: ModulusConfig) -> None:
     input_keys = [Key("x"), Key("y"), Key("z"), Key("t"), Key("D")]
     output_keys = [Key("N")]
 
-    # Use the custom architecture class
-    tumor_net = CustomFullyConnectedArch(
-        input_keys=input_keys,
-        output_keys=output_keys,
-        layer_size=cfg.arch.fully_connected.layer_size,
-        nr_layers=cfg.arch.fully_connected.nr_layers,
-    )
+    # # Use the custom architecture class
+    # tumor_net = CustomFullyConnectedArch(
+    #     input_keys=input_keys,
+    #     output_keys=output_keys,
+    #     layer_size=cfg.arch.fully_connected.layer_size,
+    #     nr_layers=cfg.arch.fully_connected.nr_layers,
+    # )
 
+    tumor_net = instantiate_arch(
+        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("D")],  # add "D" and "t" as additional input (parameterized)
+        output_keys=[Key("N")],
+        cfg=cfg.arch.fully_connected,
+        )
+    # set_trace()
     for i in range(10):
         print("########################################################")
     # Print the total number of trainable parameters
@@ -384,8 +392,8 @@ def run(cfg: ModulusConfig) -> None:
 
     # Initial condition: normalized Gaussian distribution
     def initial_tumor_density(x, y, z):
-        center_x, center_y, center_z = 100, 100, 50  # mm
-        sigma = 2  # standard deviation in mm
+        center_x, center_y, center_z = 130, 120, 60  # mm
+        sigma = 5  # standard deviation in mm
         return np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2 + (z - center_z) ** 2) / (2 * sigma ** 2))
 
     # Initial condition constraint

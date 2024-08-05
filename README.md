@@ -42,7 +42,7 @@ where the terms on the LHS represented the temporal evolution of the normalized 
 
 ${N}_T(x,t)$: Normalized tumor density (unitless) \
 $D_T$: Tumor cell diffusion coefficient ($mm^2/day$)\
-$\kappa_T$: Tumor cell proliferation rate ($$day^{-1}) \
+$\kappa_T$: Tumor cell proliferation rate ($day^{-1}$) \
 $\theta_T$: Carrying capacity of the tumor (unitless)
 
 ### Treatment response model

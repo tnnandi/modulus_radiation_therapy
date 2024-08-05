@@ -40,10 +40,10 @@ $\frac{\partial \hat{N}_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla \hat{N}_T
 where the terms on the LHS represented the temporal evolution of the normalized tumor density $\hat{N}$. The first and the second terms on the RHS represent diffusion and proliferation, respectively. 
 
 
-${N}_T(x,t)$: Normalized tumor density \
-$D_T$: Tumor cell diffusion coefficient \
-$\kappa_T$: Tumor cell proliferation rate \
-$\theta_T$: Carrying capacity of the tumor 
+${N}_T(x,t)$: Normalized tumor density (unitless) \
+$D_T$: Tumor cell diffusion coefficient ($mm^2/day$)\
+$\kappa_T$: Tumor cell proliferation rate ($$day^{-1}) \
+$\theta_T$: Carrying capacity of the tumor (unitless)
 
 ### Treatment response model
 The response to radiotherapy (RT) and chemotherapy (CT) is modeled as a discrete event:

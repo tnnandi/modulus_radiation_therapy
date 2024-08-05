@@ -295,7 +295,7 @@ def run(cfg: ModulusConfig) -> None:
 
     # proliferation rate and carrying capacity
     k_p_value = 0.5
-    theta_value = 0.5
+    theta_value = 0.1
 
     print("Bounds after scaling")
     print(farfield_mesh.bounds)
@@ -310,12 +310,12 @@ def run(cfg: ModulusConfig) -> None:
     # for now, using the continuous time approach (later, we can move to moving window approach for time evolution over larger durations)
     # parameterized time
     time_symbol = Symbol("t")
-    time_range = (0.0, 5.0)  # in days
+    time_range = (0.0, 10.0)  # in days
 
     # parameterized diffusion coefficient
     D_symbol = Symbol("D")
     # D_range = (0.001, 0.01) # need to check these values to make them realistic
-    D_range_mm2_day = (0.1, 0.8)  # in mm^2/day (as provided by David)
+    D_range_mm2_day = (0.1, 10)  # in mm^2/day (as provided by David)
     # D_range_m2_s = (D_range_mm2_day[0] * 1.157e-11, D_range_mm2_day[1] * 1.157e-11)  # convert to m^2/s # check if these are realistic
 
     param_ranges = Parameterization({D_symbol: D_range_mm2_day, time_symbol: time_range})
@@ -376,6 +376,7 @@ def run(cfg: ModulusConfig) -> None:
         # outvar={"N": 0},
         outvar={"normal_gradient_N": 0}, # set the surface normal gradient of N to zero
         batch_size=cfg.batch_size.farfield,
+        lambda_weighting={"normal_gradient_N": 1.0},
         parameterization=param_ranges
     )
     domain.add_constraint(farfield, "farfield")
@@ -386,6 +387,7 @@ def run(cfg: ModulusConfig) -> None:
         geometry=interior_mesh,
         outvar={"diffusion_proliferation_source_N": 0},  # can add a source term
         batch_size=cfg.batch_size.interior,
+        lambda_weighting={"diffusion_proliferation_source_N": 10.0},
         parameterization=param_ranges,
     )
     domain.add_constraint(interior, "interior")
@@ -405,14 +407,14 @@ def run(cfg: ModulusConfig) -> None:
         # representing the initial tumor using a gaussian distribution centered around a specific location
         # outvar={"N": 0},
         batch_size=cfg.batch_size.initial_condition,  # 10
-        lambda_weighting={"N": 1.0},
+        lambda_weighting={"N": 50.0},
         parameterization={D_symbol: D_range_mm2_day, time_symbol: 0}  # fix t=0
     )
     domain.add_constraint(initial_condition, "initial_condition")
 
     # Interior inferencer
-    inference_times = [0.0, 2.5, 5.0]
-    inference_Ds = [0.1, 0.4, 0.8]
+    inference_times = [0.0, 5.0, 10.0]
+    inference_Ds = [0.1, 1, 10]
     # D_mapping = {0.01: "0p01", 0.1: "0p1", 0.8: "0p8"}
 
     interior_points = interior_mesh.sample_interior(cfg.batch_size.inference)

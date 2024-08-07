@@ -57,7 +57,7 @@ $$
 \text{SF}_{\text{RT+CT}}(x,t) = e^{-\alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta} \right)}, 
 $$
 
-where $\alpha$ is a treatment sensitivity term, $\text{Dose}(x,t)$ is the dose of RT+CT given in a single fraction, and $\alpha/\beta$ is the ratio of the linear and quadratic sensitivity terms set to a fixed value of 5.6 Gy.
+where $\alpha$ is a treatment sensitivity term, $\text{Dose}(x,t)$ is the dose of RT+CT given in a single fraction, and $\alpha/\beta$ is the ratio of the linear and quadratic sensitivity terms <!-- set to a fixed value of 5.6 Gy. -->
 
 ### Modified tumor evolution equation with the treatment term included
 

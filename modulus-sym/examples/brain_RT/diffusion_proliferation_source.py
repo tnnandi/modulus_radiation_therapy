@@ -17,10 +17,11 @@
 """Equation with diffusion, proliferation and source terms
 """
 
-from sympy import Symbol, Function, Number
+from sympy import Symbol, Function, Number, exp
 
 from modulus.sym.eq.pde import PDE
 from modulus.sym.node import Node
+import torch
 
 
 class DiffusionProliferationSource(PDE):
@@ -61,7 +62,7 @@ class DiffusionProliferationSource(PDE):
 
     name = "DiffusionProliferationSource"
 
-    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", dim=3, time=True, mixed_form=False):
+    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", alpha="alpha", alpha_by_beta="alpha_by_beta", dim=3, time=True, mixed_form=False):
         # set params
         self.T = T
         self.dim = dim
@@ -112,8 +113,25 @@ class DiffusionProliferationSource(PDE):
         elif type(theta) in [float, int]:
             theta = Number(theta)
 
+        # alpha parameter
+        if type(alpha) is str:
+            alpha = Function(alpha)(*input_variables)
+        elif type(alpha) in [float, int]:
+            alpha = Number(alpha)
+
+        # alpha_by_beta parameter
+        if type(alpha_by_beta) is str:
+            alpha_by_beta = Function(alpha_by_beta)(*input_variables)
+        elif type(alpha_by_beta) in [float, int]:
+            alpha_by_beta = Number(alpha_by_beta)
+
+        # Dose function
+        Dose = Function("Dose")(*input_variables)
+
         # set equations
         self.equations = {}
+
+        source_term = alpha * Dose * (1 + Dose / alpha_by_beta) * T
 
         if not self.mixed_form:
             self.equations["diffusion_proliferation_source_" + self.T] = (
@@ -122,8 +140,28 @@ class DiffusionProliferationSource(PDE):
                 - (D * T.diff(y)).diff(y)
                 - (D * T.diff(z)).diff(z)
                 + k_p * T * (1 - T / theta)
-                - Q
+                - source_term # comment this out for the simplified problem
             )
+
+        # # define sigmoid function using sympy
+        # sigmoid = lambda x: 1 / (1 + exp(-x))
+        #
+        # # apply sigmoid to T to constrain it between 0 and 1
+        # T_constrained = sigmoid(T)
+        #
+        # # set equations
+        # self.equations = {}
+        #
+        # if not self.mixed_form:
+        #     self.equations["diffusion_proliferation_source_" + self.T] = (
+        #             T_constrained.diff(t)
+        #             - (D * T_constrained.diff(x)).diff(x)
+        #             - (D * T_constrained.diff(y)).diff(y)
+        #             - (D * T_constrained.diff(z)).diff(z)
+        #             + k_p * T_constrained * (1 - T_constrained / theta)
+        #             - Q
+        #     )
+
         elif self.mixed_form:
             T_x = Function("T_x")(*input_variables)
             T_y = Function("T_y")(*input_variables)
@@ -133,12 +171,12 @@ class DiffusionProliferationSource(PDE):
                 T_z = Number(0)
 
             self.equations["diffusion_proliferation_source_" + self.T] = (
-                T.diff(t)
-                - (D * T_x).diff(x)
-                - (D * T_y).diff(y)
-                - (D * T_z).diff(z)
-                + k_p * T * (1 - T / theta)
-                - Q
+                    T.diff(t)
+                    - (D * T_x).diff(x)
+                    - (D * T_y).diff(y)
+                    - (D * T_z).diff(z)
+                    + k_p * T * (1 - T / theta)
+                    - Q
             )
             self.equations["compatibility_T_x"] = T.diff(x) - T_x
             self.equations["compatibility_T_y"] = T.diff(y) - T_y
@@ -216,14 +254,14 @@ class DiffusionInterface(PDE):
         # set equations
         self.equations = {}
         self.equations["diffusion_interface_dirichlet_" + self.T_1 + "_" + self.T_2] = (
-            T_1 - T_2
+                T_1 - T_2
         )
         flux_1 = self.D_1 * (
-            normal_x * T_1.diff(x) + normal_y * T_1.diff(y) + normal_z * T_1.diff(z)
+                normal_x * T_1.diff(x) + normal_y * T_1.diff(y) + normal_z * T_1.diff(z)
         )
         flux_2 = self.D_2 * (
-            normal_x * T_2.diff(x) + normal_y * T_2.diff(y) + normal_z * T_2.diff(z)
+                normal_x * T_2.diff(x) + normal_y * T_2.diff(y) + normal_z * T_2.diff(z)
         )
         self.equations["diffusion_interface_neumann_" + self.T_1 + "_" + self.T_2] = (
-            flux_1 - flux_2
+                flux_1 - flux_2
         )

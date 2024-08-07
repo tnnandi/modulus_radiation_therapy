@@ -85,10 +85,10 @@ List of relevant parameterized quantities and their representative ranges (from 
 Currently, the fixed and parameterized quantities are set as follows:
 
 $D_T$:  0.5 $mm^2/day$\
-$\kappa_T$: 0.5 $day^{-1}$) \
+$\kappa_T$: 0.5 $day^{-1}$ \
 $\theta_T$: 0.1 \
 $\alpha $: 0.5 \
 $\frac{\alpha}{\beta}$: 10 
 
-Time: 0 to 10 days
+Time: 0 to 10 days \
 Dose: 0 to 10 $Gy$ included as a discrete event using a Heaviside function at the beginning of the third day

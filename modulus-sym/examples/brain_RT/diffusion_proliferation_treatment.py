@@ -17,7 +17,7 @@
 """Equation with diffusion, proliferation and source terms
 """
 
-from sympy import Symbol, Function, Number, exp, Heaviside
+from sympy import Symbol, Function, Number, exp, Piecewise
 
 from modulus.sym.eq.pde import PDE
 from modulus.sym.node import Node
@@ -62,7 +62,8 @@ class DiffusionProliferationTreatment(PDE):
 
     name = "DiffusionProliferationTreatment"
 
-    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", alpha="alpha", alpha_by_beta="alpha_by_beta", dim=3, time=True, mixed_form=False):
+    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", alpha="alpha", alpha_by_beta="alpha_by_beta", dim=3,
+                 time=True, mixed_form=False):
         # set params
         self.T = T
         self.dim = dim
@@ -131,16 +132,27 @@ class DiffusionProliferationTreatment(PDE):
         # set equations
         self.equations = {}
 
-        source_term = alpha * Dose * (1 + Dose / alpha_by_beta) * T * Heaviside(t - 3)
+        # formulation following Rockne 2010 (Predicting the efficacy of radiotherapy in individual
+        # glioblastoma patients in vivo: a mathematical
+        # modeling approach)
+        SF = exp(-alpha * Dose * (1 + Dose / alpha_by_beta))
+        # define the source term to be active at t=2 day
+        t_treatment = 2.0
+        R_effects = Piecewise(
+            (0, t != t_treatment),
+            (1 - SF, t == t_treatment)
+        )
+
+        source_term = R_effects * T * (1 - T / theta)
 
         if not self.mixed_form:
             self.equations["diffusion_proliferation_source_" + self.T] = (
-                T.diff(t)
-                - (D * T.diff(x)).diff(x)
-                - (D * T.diff(y)).diff(y)
-                - (D * T.diff(z)).diff(z)
-                + k_p * T * (1 - T / theta)
-                - source_term # comment this out for the simplified problem
+                    T.diff(t)
+                    - (D * T.diff(x)).diff(x)
+                    - (D * T.diff(y)).diff(y)
+                    - (D * T.diff(z)).diff(z)
+                    + k_p * T * (1 - T / theta)
+                    - source_term  # comment this out for the simplified problem
             )
 
         # # define sigmoid function using sympy

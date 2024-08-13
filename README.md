@@ -91,4 +91,4 @@ $\alpha $: 0.5 \
 $\frac{\alpha}{\beta}$: 10 
 
 Time: 0 to 10 days \
-Dose: 0 to 10 $Gy$ included as a discrete event at the beginning of the third day
+Dose: 0 to 10 $Gy$ included as a discrete event at the beginning of the second day

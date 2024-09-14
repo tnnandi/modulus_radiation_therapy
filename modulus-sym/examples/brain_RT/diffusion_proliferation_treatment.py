@@ -17,7 +17,7 @@
 """Equation with diffusion, proliferation and source terms
 """
 
-from sympy import Symbol, Function, Number, exp, Piecewise
+from sympy import Symbol, Function, Number, exp, Piecewise, pi, sqrt, Max, Min, Heaviside
 
 from modulus.sym.eq.pde import PDE
 from modulus.sym.node import Node
@@ -62,7 +62,8 @@ class DiffusionProliferationTreatment(PDE):
 
     name = "DiffusionProliferationTreatment"
 
-    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", alpha="alpha", alpha_by_beta="alpha_by_beta", dim=3,
+    def __init__(self, T="T", D="D", Q=0, k_p="k_p", theta="theta", alpha="alpha", alpha_by_beta="alpha_by_beta",
+                 dose="dose", dim=3,
                  time=True, mixed_form=False):
         # set params
         self.T = T
@@ -126,8 +127,14 @@ class DiffusionProliferationTreatment(PDE):
         elif type(alpha_by_beta) in [float, int]:
             alpha_by_beta = Number(alpha_by_beta)
 
-        # Dose function
-        Dose = Function("Dose")(*input_variables)
+        # Dose parameters
+        if type(dose) is str:
+            dose = Function(dose)(*input_variables)
+        elif type(dose) in [float, int]:
+            dose = Number(dose)
+
+        # # Dose function
+        # Dose = Function("Dose")(*input_variables)
 
         # set equations
         self.equations = {}
@@ -135,13 +142,71 @@ class DiffusionProliferationTreatment(PDE):
         # formulation following Rockne 2010 (Predicting the efficacy of radiotherapy in individual
         # glioblastoma patients in vivo: a mathematical
         # modeling approach)
-        SF = exp(-alpha * Dose * (1 + Dose / alpha_by_beta))
-        # define the source term to be active at t=2 day
-        t_treatment = 2.0
+
+        # treatment_times
+        # array([32., 33., 34., 35., 36., 39., 40., 41., 42., 43., 46., 47., 48.,
+        #        49., 50., 53., 54., 55., 56., 57., 60., 61., 62., 63., 64., 67.,
+        #        68., 69., 70., 71.])
+
+        # day
+        # array([[  0.],
+        #        [ 38.],
+        #        [ 45.],
+        #        [ 52.],
+        #        [ 59.],
+        #        [ 66.],
+        #        [101.],
+        #        [131.],
+        #        [161.]])
+
+        # for our calculations, let's assume day 32 as day 2. Let's start out simulation from day 31 that is now indexed as day 1
+
+        SF = exp(-alpha * dose * (1 + dose / alpha_by_beta))
+        # define the source term to be active at treatment days day
+        t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
         R_effects = Piecewise(
-            (0, t != t_treatment),
-            (1 - SF, t == t_treatment)
+            (0, t not in t_treatment),
+            (1 - SF, t in t_treatment)
         )
+
+        # R_effects = ((1 - SF)
+        #              * (1 / (sigma * sqrt(2 * pi)))
+        #              * exp(-(t - Min(t_treatment, key=lambda x: abs(t - x))) ** 2 / (2 * sigma ** 2)))
+
+        sigma = 0.1
+        t_center = 5  # single treatment time
+        flat_top_duration = 2 * sigma
+
+        # define the source term as a normal distribution centered at specific treatment times
+        # See Eq 3 in Rockne et al 2010, "Predicting the efficacy of radiotherapy in individual glioblastoma patients in vivo: a mathematical modeling approach"
+        # Instead of using the source term using
+
+        # R_effects = Piecewise(
+        #     *[
+        #         ((1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(-(t - t_center) ** 2 / (2 * sigma ** 2)),
+        #          (t >= t_center - 3 * sigma) & (t <= t_center + 3 * sigma))
+        #         for t_center in t_treatment
+        #     ]
+        # )
+
+        # R_effects = Piecewise(
+        #     ((1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(-(t - t_center) ** 2 / (2 * sigma ** 2)),
+        #      (t >= t_center - 3 * sigma) & (t <= t_center + 3 * sigma))
+        # )
+
+        # R_effects = 1 - SF
+
+        # Create the signal with flat top and smooth drop using Heaviside and Gaussian
+        # R_effects = (
+        #         (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * Heaviside(t - (t_center - flat_top_duration / 2)) * Heaviside(
+        #     (t_center + flat_top_duration / 2) - t)
+        #         + (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(
+        #     -(t - (t_center + flat_top_duration / 2)) ** 2 / (2 * sigma ** 2)) * Heaviside(
+        #     t - (t_center + flat_top_duration / 2))
+        #         + (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(
+        #     -(t - (t_center - flat_top_duration / 2)) ** 2 / (2 * sigma ** 2)) * Heaviside(
+        #     (t_center - flat_top_duration / 2) - t)
+        # )
 
         source_term = R_effects * T * (1 - T / theta)
 
@@ -151,8 +216,8 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T.diff(x)).diff(x)
                     - (D * T.diff(y)).diff(y)
                     - (D * T.diff(z)).diff(z)
-                    + k_p * T * (1 - T / theta)
-                    - source_term  # comment this out for the simplified problem
+                    - k_p * T * (1 - T / theta)
+                    + source_term
             )
 
         # # define sigmoid function using sympy

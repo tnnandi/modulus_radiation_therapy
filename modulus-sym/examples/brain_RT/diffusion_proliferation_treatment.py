@@ -163,7 +163,8 @@ class DiffusionProliferationTreatment(PDE):
 
         SF = exp(-alpha * dose * (1 + dose / alpha_by_beta))
         # define the source term to be active at treatment days day
-        t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
+        # t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
+        t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
         R_effects = Piecewise(
             (0, t not in t_treatment),
             (1 - SF, t in t_treatment)
@@ -173,9 +174,9 @@ class DiffusionProliferationTreatment(PDE):
         #              * (1 / (sigma * sqrt(2 * pi)))
         #              * exp(-(t - Min(t_treatment, key=lambda x: abs(t - x))) ** 2 / (2 * sigma ** 2)))
 
-        sigma = 0.1
-        t_center = 5  # single treatment time
-        flat_top_duration = 2 * sigma
+        # sigma = 0.1
+        # t_center = 5  # single treatment time
+        # flat_top_duration = 2 * sigma
 
         # define the source term as a normal distribution centered at specific treatment times
         # See Eq 3 in Rockne et al 2010, "Predicting the efficacy of radiotherapy in individual glioblastoma patients in vivo: a mathematical modeling approach"
@@ -252,8 +253,8 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T_x).diff(x)
                     - (D * T_y).diff(y)
                     - (D * T_z).diff(z)
-                    + k_p * T * (1 - T / theta)
-                    - Q
+                    - k_p * T * (1 - T / theta)
+                    + Q
             )
             self.equations["compatibility_T_x"] = T.diff(x) - T_x
             self.equations["compatibility_T_y"] = T.diff(y) - T_y

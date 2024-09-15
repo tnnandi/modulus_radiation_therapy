@@ -339,7 +339,7 @@ def run(cfg: ModulusConfig) -> None:
                                                                            dim=3,
                                                                            time=True)  # the equation will be solved for "N": the normalized tumor density
 
-    set_trace()
+    # set_trace()
     # override defaults
     cfg.arch.fully_connected.layer_size = 128
     cfg.arch.fully_connected.nr_layers = 8#4

@@ -17,7 +17,7 @@
 """Equation with diffusion, proliferation and source terms
 """
 
-from sympy import Symbol, Function, Number, exp, Piecewise, pi, sqrt, Max, Min, Heaviside
+from sympy import Symbol, Function, Number, exp, Piecewise, pi, sqrt, Max, Min, And, Heaviside
 
 from modulus.sym.eq.pde import PDE
 from modulus.sym.node import Node
@@ -165,51 +165,28 @@ class DiffusionProliferationTreatment(PDE):
         # define the source term to be active at treatment days day
         # t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
         t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
-        R_effects = Piecewise(
-            (0, t not in t_treatment),
-            (1 - SF, t in t_treatment)
-        )
-
-        # R_effects = ((1 - SF)
-        #              * (1 / (sigma * sqrt(2 * pi)))
-        #              * exp(-(t - Min(t_treatment, key=lambda x: abs(t - x))) ** 2 / (2 * sigma ** 2)))
-
-        # sigma = 0.1
-        # t_center = 5  # single treatment time
-        # flat_top_duration = 2 * sigma
-
+        delta = 0.1  # interval around the treatment times at which the source term is active
+        # R_effects = Piecewise(
+        #     (0, t not in t_treatment),
+        #     (1 - SF, t in t_treatment)
+        # )
         # define the source term as a normal distribution centered at specific treatment times
         # See Eq 3 in Rockne et al 2010, "Predicting the efficacy of radiotherapy in individual glioblastoma patients in vivo: a mathematical modeling approach"
         # Instead of using the source term using
 
-        # R_effects = Piecewise(
-        #     *[
-        #         ((1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(-(t - t_center) ** 2 / (2 * sigma ** 2)),
-        #          (t >= t_center - 3 * sigma) & (t <= t_center + 3 * sigma))
-        #         for t_center in t_treatment
-        #     ]
+        # R_effects = sum(
+        #     Heaviside(t - (t_treatment[i] - delta)) - Heaviside(t - (t_treatment[i] + delta))
+        #     for i in range(len(t_treatment))
         # )
 
-        # R_effects = Piecewise(
-        #     ((1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(-(t - t_center) ** 2 / (2 * sigma ** 2)),
-        #      (t >= t_center - 3 * sigma) & (t <= t_center + 3 * sigma))
-        # )
-
-        # R_effects = 1 - SF
-
-        # Create the signal with flat top and smooth drop using Heaviside and Gaussian
-        # R_effects = (
-        #         (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * Heaviside(t - (t_center - flat_top_duration / 2)) * Heaviside(
-        #     (t_center + flat_top_duration / 2) - t)
-        #         + (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(
-        #     -(t - (t_center + flat_top_duration / 2)) ** 2 / (2 * sigma ** 2)) * Heaviside(
-        #     t - (t_center + flat_top_duration / 2))
-        #         + (1 - SF) * (1 / (sigma * sqrt(2 * pi))) * exp(
-        #     -(t - (t_center - flat_top_duration / 2)) ** 2 / (2 * sigma ** 2)) * Heaviside(
-        #     (t_center - flat_top_duration / 2) - t)
-        # )
+        R_effects = sum(
+            (1 - SF) * (Heaviside(t - (t_treatment[i] - delta)) - Heaviside(t - (t_treatment[i] + delta)))
+            for i in range(len(t_treatment))
+        )
 
         source_term = R_effects * T * (1 - T / theta)
+
+        # Q: how is the time range sampled? What's the sampling rate? This can probably decide the width of the RT functions
 
         if not self.mixed_form:
             self.equations["diffusion_proliferation_source_" + self.T] = (
@@ -218,7 +195,8 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T.diff(y)).diff(y)
                     - (D * T.diff(z)).diff(z)
                     - k_p * T * (1 - T / theta)
-                    + source_term
+                    # + source_term
+                    - source_term
             )
 
         # # define sigmoid function using sympy

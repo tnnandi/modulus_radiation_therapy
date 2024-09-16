@@ -195,8 +195,8 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T.diff(y)).diff(y)
                     - (D * T.diff(z)).diff(z)
                     - k_p * T * (1 - T / theta)
-                    # + source_term
-                    - source_term
+                    + source_term
+                    # - source_term
             )
 
         # # define sigmoid function using sympy

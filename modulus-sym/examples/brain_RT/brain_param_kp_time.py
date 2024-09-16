@@ -273,7 +273,7 @@ class CustomFullyConnectedArch(FullyConnectedArch):
 
 @modulus.sym.main(config_path="conf", config_name="config")
 def run(cfg: ModulusConfig) -> None:
-    cfg.network_dir = "./brain_param_kp_time.dose_2.lambda_1_100_50.layer_size_128.nr_layers_8_test"
+    cfg.network_dir = "./brain_param_kp_time.dose_2.lambda_1_100_50.heaviside_source_plus"
     # read stl files to make geometry
     point_path = to_absolute_path("./stl_files")
 
@@ -339,10 +339,11 @@ def run(cfg: ModulusConfig) -> None:
                                                                            dim=3,
                                                                            time=True)  # the equation will be solved for "N": the normalized tumor density
 
+    print(tumor_diffusion_proliferation_source_eq.pprint())
     # set_trace()
     # override defaults
     cfg.arch.fully_connected.layer_size = 128
-    cfg.arch.fully_connected.nr_layers = 8#4
+    cfg.arch.fully_connected.nr_layers = 4
 
     input_keys = [Key("x"), Key("y"), Key("z"), Key("t"), Key("kp")]
     output_keys = [Key("N")]

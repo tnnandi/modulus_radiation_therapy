@@ -23,12 +23,11 @@ parameter-specific computer simulations.
 1. View brain cross sections from MRI scans using [view_mat_interactive_all.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/view_mat_interactive_all.py) to ensure the geometry is well represented for meshing
 2. Generate surface mesh (STL) from the cross sections using [convert_to_stl_surface_use_gmsh_volume.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/convert_to_stl_surface_use_gmsh_volume.py) 
 3. Generate volume mesh (STL) from the surface mesh using [gmsh](https://gmsh.info/). Generated meshes for a single patient are available at [Box](https://anl.box.com/s/tlyfb74wyuma0jm4zha8zfrwcspxshlb)
-4. Edit governing equation/s at [diffusion_proliferation_treatment.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/diffusion_proliferation_treatment.py). Ideally, this should be in /eq/pdes dir, need to fix installation issues within the singularity shell.
-4. Execute [brain_param_dose_time.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/brain_param_dose_time.py) using "mpirun -np <num_gpus> python brain_param_D_time.py" to begin PINN training. 
+4. Edit governing equation/s at [diffusion_proliferation_treatment.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/diffusion_proliferation_treatment.py). 
+5. Execute [brain_param_kp_dose_time.windowing.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/brain_param_kp_dose_time.windowing.py)  "python " to begin PINN training. 
    - Edit the NN configuration, fixed physical properties, ICs/BCs and the parameterized variables as required.
-   - The diffusion coefficient is considered as parameterized with values ranging from 0.1 to 0.8 $mm^2/day$.
    - The initial tumor is represented using a gaussian distribution centered around a specific location 
-
+6. 
 Note: Step 4 needs to be carried out within a singularity shell for Nvidia's Modulus and the STL files need to be placed at the approriate locations 
 
 ## Implementation of the governing equations
@@ -49,7 +48,7 @@ $\theta_T$: Carrying capacity of the tumor (unitless)
 The response to radiotherapy (RT) and chemotherapy (CT) is modeled as a discrete event:
 
 ```math
-\hat{N}_{i,\text{post}}(x,t) = \hat{N}_{i,\text{pre}}(x,t) \text{SF}_{\text{RT+CT}}(x,t)$
+\hat{N}_{i,\text{post}}(x,t) = \hat{N}_{i,\text{pre}}(x,t) \text{SF}_{\text{RT+CT}}(x,t)
 ```
 where the surviving fractions of cells due to a single dose of combined radiotherapy and chemotherapy is given by: 
 
@@ -58,21 +57,9 @@ $$
 $$
 
 where $\alpha$ is a treatment sensitivity term, $\text{Dose}(x,t)$ is the dose of RT+CT given in a single fraction, and $\alpha/\beta$ is the ratio of the linear and quadratic sensitivity terms <!-- set to a fixed value of 5.6 Gy. -->
+To account for the effects of RT, tumor density is multiplied the surviving fraction of cells at the beginning of each time window representing delivery of RT 
 
-### Modified tumor evolution equation with the treatment term included
-
-The reduction in tumor density due to treatment can be modeled as a decay term proportional to the tumor density and the treatment dose:
-```math
-\frac{dN_T(x,t)}{dt}\bigg|_{\text{treatment}} = -N_T(x,t) \cdot \alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta}\right)
-```
-
-Thus, the full governing equation including the treatment response term is:
-
-```math
-\frac{\partial N_T(x,t)}{\partial t} = \nabla \cdot (D_T \nabla N_T(x,t)) + k_p N_T(x,t) \left(1 - \frac{N_T(x,t)}{\theta_T}\right) - \alpha \cdot \text{Dose}(x,t) \left(1 + \frac{\text{Dose}(x,t)}{\alpha/\beta}\right) N_T(x,t)
-```
-Note 1: Currently, the PINN model is set up with a parameterized treatment response term. The equation is implemented in [diffusion_proliferation_treatment.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/diffusion_proliferation_treatment.py). The dose term is considered as parameterized with values ranging from 0 to 10 $Gy$. 
-Training is carried out for temporal evolution over a period of 10 days, where the treatment term is included as a discrete event at the beginning of the third day.
+Note 1: Currently, the PINN model is set up with parameterized proliferation rate and dose terms. 
 
 Note 2: Further complexities can be introduced by 
 - solving separate transport equations for the enhancing and non-enhancing parts of the tumor withe competition term included 
@@ -84,11 +71,13 @@ List of relevant parameterized quantities and their representative ranges (from 
 
 Currently, the fixed and parameterized quantities are set as follows:
 
-$D_T$:  0.5 $mm^2/day$\
-$\kappa_T$: 0.5 $day^{-1}$ \
-$\theta_T$: 0.1 \
-$\alpha $: 0.5 \
+$D_T$:  0.125 $mm^2/day$\
+$\theta_T$: 0.1 $day^{-1}$ \
+$\alpha $: 0.035 \
 $\frac{\alpha}{\beta}$: 10 
+Days on which RT is administered: [1, 2, 3, 4, 5, 8, 9, 10, 11]
 
-Time: 0 to 10 days \
-Dose: 0 to 10 $Gy$ included as a discrete event at the beginning of the second day
+$\kappa_T$: 0 to 0.2
+Dose: 0 to 8 $Gy$ included as a discrete event at the beginning of the days on which RT was administered
+
+

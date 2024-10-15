@@ -87,7 +87,7 @@ class DiffusionProliferationTreatment(PDE):
         if not self.time:
             input_variables.pop("t")
 
-        # Temperature
+        # tumor density
         assert type(T) == str, "T needs to be string"
         T = Function(T)(*input_variables)
 
@@ -134,7 +134,7 @@ class DiffusionProliferationTreatment(PDE):
             dose = Number(dose)
 
         # # Dose function
-        # Dose = Function("Dose")(*input_variables)
+        # dose = Function("dose")(*input_variables)
 
         # set equations
         self.equations = {}
@@ -165,7 +165,10 @@ class DiffusionProliferationTreatment(PDE):
         # define the source term to be active at treatment days day
         # t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
         t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
+        t_treatment = [3]
         delta = 0.1  # interval around the treatment times at which the source term is active
+
+
         # R_effects = Piecewise(
         #     (0, t not in t_treatment),
         #     (1 - SF, t in t_treatment)
@@ -195,7 +198,7 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T.diff(y)).diff(y)
                     - (D * T.diff(z)).diff(z)
                     - k_p * T * (1 - T / theta)
-                    + source_term
+                    # + source_term  # source term turned off; N is multiplied by SF after each time window to account for the effects of radiation
                     # - source_term
             )
 

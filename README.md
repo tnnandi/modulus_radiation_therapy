@@ -77,7 +77,7 @@ $\alpha $: 0.035 \
 $\frac{\alpha}{\beta}$: 10 
 Days on which RT is administered: [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
 
-$\kappa_T$: 0 to 0.2
+$\kappa_T$: 0 to 0.2 \
 Dose: 0 to 8 $Gy$ included as a discrete event at the beginning of the days on which RT was administered
 
 ## Changes in source code for handling the RT dose term and improved convergence

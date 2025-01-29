@@ -133,63 +133,7 @@ class DiffusionProliferationTreatment(PDE):
         elif type(dose) in [float, int]:
             dose = Number(dose)
 
-        # # Dose function
-        # dose = Function("dose")(*input_variables)
-
-        # set equations
         self.equations = {}
-
-        # formulation following Rockne 2010 (Predicting the efficacy of radiotherapy in individual
-        # glioblastoma patients in vivo: a mathematical
-        # modeling approach)
-
-        # treatment_times
-        # array([32., 33., 34., 35., 36., 39., 40., 41., 42., 43., 46., 47., 48.,
-        #        49., 50., 53., 54., 55., 56., 57., 60., 61., 62., 63., 64., 67.,
-        #        68., 69., 70., 71.])
-
-        # day
-        # array([[  0.],
-        #        [ 38.],
-        #        [ 45.],
-        #        [ 52.],
-        #        [ 59.],
-        #        [ 66.],
-        #        [101.],
-        #        [131.],
-        #        [161.]])
-
-        # for our calculations, let's assume day 32 as day 2. Let's start out simulation from day 31 that is now indexed as day 1
-
-        SF = exp(-alpha * dose * (1 + dose / alpha_by_beta))
-        # define the source term to be active at treatment days day
-        # t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
-        t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
-        t_treatment = [3]
-        delta = 0.1  # interval around the treatment times at which the source term is active
-
-
-        # R_effects = Piecewise(
-        #     (0, t not in t_treatment),
-        #     (1 - SF, t in t_treatment)
-        # )
-        # define the source term as a normal distribution centered at specific treatment times
-        # See Eq 3 in Rockne et al 2010, "Predicting the efficacy of radiotherapy in individual glioblastoma patients in vivo: a mathematical modeling approach"
-        # Instead of using the source term using
-
-        # R_effects = sum(
-        #     Heaviside(t - (t_treatment[i] - delta)) - Heaviside(t - (t_treatment[i] + delta))
-        #     for i in range(len(t_treatment))
-        # )
-
-        R_effects = sum(
-            (1 - SF) * (Heaviside(t - (t_treatment[i] - delta)) - Heaviside(t - (t_treatment[i] + delta)))
-            for i in range(len(t_treatment))
-        )
-
-        source_term = R_effects * T * (1 - T / theta)
-
-        # Q: how is the time range sampled? What's the sampling rate? This can probably decide the width of the RT functions
 
         if not self.mixed_form:
             self.equations["diffusion_proliferation_source_" + self.T] = (
@@ -198,8 +142,6 @@ class DiffusionProliferationTreatment(PDE):
                     - (D * T.diff(y)).diff(y)
                     - (D * T.diff(z)).diff(z)
                     - k_p * T * (1 - T / theta)
-                    # + source_term  # source term turned off; N is multiplied by SF after each time window to account for the effects of radiation
-                    # - source_term
             )
 
         # # define sigmoid function using sympy

@@ -23,17 +23,20 @@ defaults :
   - loss: sum
   - _self_
 
+jit: false
+cuda_graphs: false
+
 scheduler:
   decay_rate: 0.95
-  decay_steps: 15000
+  decay_steps: 10000 #25000 # need to play with this
 
 training:
-  rec_results_freq : 1000
-  rec_constraint_freq: 1000
-  max_steps : 1500000
+  rec_results_freq : 10000
+  rec_constraint_freq: 10000
+  max_steps : 50000 # use larger max_steps for the IC (say, 200000), and smaller for the rest of the windows (50000)
 
 batch_size:
   farfield: 5000
-  interior: 20000
+  interior: 10000
   initial_condition: 10000
   inference: 1000000

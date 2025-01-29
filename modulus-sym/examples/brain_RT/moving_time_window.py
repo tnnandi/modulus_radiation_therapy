@@ -38,7 +38,7 @@ class MovingTimeWindowArch(Arch):
         Size of the time window. This will be used to slide
         the window forward every iteration.
     """
-    # edited the code below to multiply N from previous time window by SF (that is a function of the parameterized dose)
+    # TN: edited the code below to multiply N from previous time window by SF (that is a function of the parameterized dose)
     # doesn't work when jit and cuda_graphs are set to true. Also has issues with parallel training
     def __init__(
         self,
@@ -102,7 +102,7 @@ class MovingTimeWindowArch(Arch):
         #         y_prev_step[key] = torch.softmax(y_prev_step[key], dim=0)
 
 
-        # if the time window corresponds to the treatment time, reduce N to account for effects of RT, and then proceed with the calculations for the time window
+        #  if the time window corresponds to the treatment time, reduce N to account for effects of RT, and then proceed with the calculations for the time window
         if is_treatment_time:
             # calculate SF based on dose
             dose = in_vars["dose"]

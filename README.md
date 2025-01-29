@@ -27,7 +27,8 @@ parameter-specific computer simulations.
 5. Execute [brain_param_kp_dose_time.windowing.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/brain_param_kp_dose_time.windowing.py)  "python " to begin PINN training. 
    - Edit the NN configuration, fixed physical properties, ICs/BCs and the parameterized variables as required.
    - The initial tumor is represented using a gaussian distribution centered around a specific location 
-6. Use [inference_kp_dose_time_autoloopstructure.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/inference_kp_dose_time_autoloopstructure.py) to carry out inference and write out vtk file consistent with Paraview naming (varying quantity listed last in the file name)
+6. Use [inference_kp_dose_time_autoloopstructure.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/inference_kp_dose_time_autoloopstructure.py) to carry out inference and write out vtk file consistent with Paraview naming (varying quantity listed last in the file name) \
+\
 Note: Step 4 needs to be carried out within a singularity shell for Nvidia's Modulus and the STL files need to be placed at the approriate locations 
 
 ## Implementation of the governing equations

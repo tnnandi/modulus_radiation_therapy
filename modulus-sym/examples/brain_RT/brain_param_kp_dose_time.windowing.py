@@ -1,3 +1,9 @@
+# Following the https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/intermediate/moving_time_window.html case
+# To run
+# cd /mnt/Modulus_24p04/modulus-sym/examples/brain_RT
+# use "mpirun -np 4 python brain_param_kp_dose_time.windowing.py"
+
+
 import os
 import sys
 import warnings
@@ -13,19 +19,12 @@ from torch import Tensor
 import torch.nn as nn
 import numpy as np
 from sympy import Symbol, sqrt, Max, Eq
-# from modulus.launch.logging import LaunchLogger, PythonLogger, initialize_wandb
 from modulus.sym.geometry import Bounds, Parameterization, Parameter
 import modulus.sym
 from modulus.sym.hydra import to_absolute_path, instantiate_arch, ModulusConfig
-
-# from modulus.sym.solver import Solver, SequentialSolver
-# from solver import Solver, SequentialSolver
-from sequential import SequentialSolver
-
-from modulus.sym.domain import Domain
-# from modulus.sym.models.moving_time_window import MovingTimeWindowArch
+from sequential import SequentialSolver # importing a custom version of SequentialSolver instead of the default one
 from moving_time_window import MovingTimeWindowArch
-
+from modulus.sym.domain import Domain
 from modulus.sym.domain.constraint import (
     PointwiseBoundaryConstraint,
     PointwiseInteriorConstraint,
@@ -36,8 +35,6 @@ from modulus.sym.domain.inferencer import PointwiseInferencer
 from modulus.sym.domain.monitor import PointwiseMonitor
 from modulus.sym.key import Key
 from modulus.sym.node import Node
-# from modulus.sym.eq.pdes.navier_stokes import NavierStokes
-# from modulus.sym.eq.pdes.advection_diffusion import AdvectionDiffusion
 from modulus.sym.eq.pdes.diffusion import Diffusion
 from modulus.sym.eq.pdes.basic import NormalDotVec
 from modulus.sym.eq.pdes.basic import GradNormal
@@ -47,9 +44,6 @@ from modulus.sym.geometry.tessellation import Tessellation
 from modulus.models.layers import FCLayer, Conv1dFCLayer
 from modulus.sym.models.activation import Activation, get_activation_fn
 from modulus.sym.models.arch import Arch
-
-# cd /mnt/Modulus_24p04/modulus-sym/examples/brain_RT
-# use "mpirun -np 4 python brain_param_kp_time.py"
 
 import sys
 # print(sys.path)
@@ -61,7 +55,7 @@ import sys
 from diffusion_proliferation_treatment import DiffusionProliferationTreatment
 
 
-# wandb.init(project="modulus_brain_RT", entity='tnnandi')
+wandb.init(project="modulus_brain_RT", entity='tnnandi')
 
 # formulation for parameterized proliferation rate (k_p) and time
 
@@ -69,224 +63,10 @@ def count_trainable_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-# Custom architecture classes to add Sigmoid activation after the final NN layer (codes adapted from sym/models/fully_connected.py)
-class FullyConnectedArchCore(nn.Module):
-    def __init__(
-            self,
-            in_features: int = 512,
-            layer_size: int = 512,
-            out_features: int = 512,  # default value, the actual value will be based on length of output_keys
-            nr_layers: int = 6,
-            skip_connections: bool = False,
-            activation_fn: Activation = Activation.SILU,
-            adaptive_activations: bool = False,
-            weight_norm: bool = True,
-            conv_layers: bool = False,
-    ) -> None:
-        super().__init__()
-
-        self.skip_connections = skip_connections
-
-        if conv_layers:
-            fc_layer = Conv1dFCLayer
-        else:
-            fc_layer = FCLayer
-
-        if adaptive_activations:
-            activation_par = nn.Parameter(torch.ones(1))
-        else:
-            activation_par = None
-
-        if not isinstance(activation_fn, list):
-            activation_fn = [activation_fn] * nr_layers
-        if len(activation_fn) < nr_layers:
-            activation_fn = activation_fn + [activation_fn[-1]] * (
-                    nr_layers - len(activation_fn)
-            )
-
-        self.layers = nn.ModuleList()
-
-        layer_in_features = in_features
-        for i in range(nr_layers):
-            self.layers.append(
-                fc_layer(
-                    in_features=layer_in_features,
-                    out_features=layer_size,
-                    activation_fn=get_activation_fn(
-                        activation_fn[i], out_features=out_features
-                    ),
-                    weight_norm=weight_norm,
-                    activation_par=activation_par,
-                )
-            )
-            layer_in_features = layer_size
-
-        # modify the final layer to include a Sigmoid activation to constrain N between 0 and 1
-        self.final_layer = nn.Sequential(
-            fc_layer(
-                in_features=layer_size,
-                out_features=out_features,
-                activation_fn=None,
-                weight_norm=False,
-                activation_par=None,
-            ),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x: Tensor) -> Tensor:
-        x_skip: Optional[Tensor] = None
-        for i, layer in enumerate(self.layers):
-            x = layer(x)
-            if self.skip_connections and i % 2 == 0:
-                if x_skip is not None:
-                    x, x_skip = x + x_skip, x
-                else:
-                    x_skip = x
-
-        x = self.final_layer(x)
-        return x
-
-    def get_weight_list(self):
-        weights = [layer.conv.weight for layer in self.layers] + [
-            self.final_layer[0].conv.weight  # Accessing the actual linear layer within the Sequential
-        ]
-        biases = [layer.conv.bias for layer in self.layers] + [
-            self.final_layer[0].conv.bias  # Accessing the actual linear layer within the Sequential
-        ]
-        return weights, biases
-
-
-class FullyConnectedArch(Arch):
-    def __init__(
-            self,
-            input_keys: List[Key],
-            output_keys: List[Key],
-            detach_keys: List[Key] = [],
-            layer_size: int = 512,
-            nr_layers: int = 6,
-            activation_fn=Activation.SILU,
-            periodicity: Union[Dict[str, Tuple[float, float]], None] = None,
-            skip_connections: bool = False,
-            adaptive_activations: bool = False,
-            weight_norm: bool = True,
-    ) -> None:
-        super().__init__(
-            input_keys=input_keys,
-            output_keys=output_keys,
-            detach_keys=detach_keys,
-            periodicity=periodicity,
-        )
-
-        if self.periodicity is not None:
-            in_features = sum(
-                [
-                    x.size
-                    for x in self.input_keys
-                    if x.name not in list(periodicity.keys())
-                ]
-            ) + +sum(
-                [
-                    2 * x.size
-                    for x in self.input_keys
-                    if x.name in list(periodicity.keys())
-                ]
-            )
-        else:
-            in_features = sum(self.input_key_dict.values())
-        out_features = sum(self.output_key_dict.values())
-
-        self._impl = FullyConnectedArchCore(
-            in_features,
-            layer_size,
-            out_features,
-            nr_layers,
-            skip_connections,
-            activation_fn,
-            adaptive_activations,
-            weight_norm,
-        )
-
-    def _tensor_forward(self, x: Tensor) -> Tensor:
-        x = self.process_input(
-            x,
-            self.input_scales_tensor,
-            periodicity=self.periodicity,
-            input_dict=self.input_key_dict,
-            dim=-1,
-        )
-        x = self._impl(x)
-        x = self.process_output(x, self.output_scales_tensor)
-        return x
-
-    def forward(self, in_vars: Dict[str, Tensor]) -> Dict[str, Tensor]:
-        x = self.concat_input(
-            in_vars,
-            self.input_key_dict.keys(),
-            detach_dict=self.detach_key_dict,
-            dim=-1,
-        )
-        y = self._tensor_forward(x)
-        return self.split_output(y, self.output_key_dict, dim=-1)
-
-    def _dict_forward(self, in_vars: Dict[str, Tensor]) -> Dict[str, Tensor]:
-        x = self.prepare_input(
-            in_vars,
-            self.input_key_dict.keys(),
-            detach_dict=self.detach_key_dict,
-            dim=-1,
-            input_scales=self.input_scales,
-            periodicity=self.periodicity,
-        )
-        y = self._impl(x)
-        return self.prepare_output(
-            y, self.output_key_dict, dim=-1, output_scales=self.output_scales
-        )
-
-
-class CustomFullyConnectedArch(FullyConnectedArch):
-    def __init__(
-            self,
-            input_keys: List[Key],
-            output_keys: List[Key],
-            detach_keys: List[Key] = [],
-            layer_size: int = 512,
-            nr_layers: int = 6,
-            activation_fn=Activation.SILU,
-            periodicity: Union[Dict[str, Tuple[float, float]], None] = None,
-            skip_connections: bool = False,
-            adaptive_activations: bool = False,
-            weight_norm: bool = True,
-    ) -> None:
-        super().__init__(
-            input_keys=input_keys,
-            output_keys=output_keys,
-            detach_keys=detach_keys,
-            layer_size=layer_size,
-            nr_layers=nr_layers,
-            activation_fn=activation_fn,
-            periodicity=periodicity,
-            skip_connections=skip_connections,
-            adaptive_activations=adaptive_activations,
-            weight_norm=weight_norm,
-        )
-
-        # Use the custom core with the original output features
-        self._impl = FullyConnectedArchCore(
-            in_features=sum(self.input_key_dict.values()),
-            layer_size=layer_size,
-            out_features=sum(self.output_key_dict.values()),
-            nr_layers=nr_layers,
-            skip_connections=skip_connections,
-            activation_fn=activation_fn,
-            adaptive_activations=adaptive_activations,
-            weight_norm=weight_norm,
-        )
-
-
 @modulus.sym.main(config_path="conf", config_name="config")
 def run(cfg: ModulusConfig) -> None:
-    # cfg.network_dir = "./outputs/brain_param_kp_dose_time.lambda_1_100_50.time_windowing"
-    # os.makedirs(cfg.network_dir, exist_ok=True)
+    cfg.network_dir = "./brain_param_kp_dose_time.lambda_1_100_100_100.updatedIC_maxsteps50K_decaysteps10K"
+    os.makedirs(cfg.network_dir, exist_ok=True)
     # read stl files to make geometry
     point_path = to_absolute_path("./stl_files")
 
@@ -342,9 +122,9 @@ def run(cfg: ModulusConfig) -> None:
 
     param_ranges = Parameterization({kp_symbol: kp_range, dose_symbol: dose_range, time_symbol: time_range})
 
-    # Need to reformulate N so that it is the normalized tumor density and is between 0 and 1
+    # Can reformulate N so that it is the normalized tumor density and is between 0 and 1
     # or can add a Sigmoid activation after the final layer of the NN
-    tumor_diffusion_proliferation_source_eq = DiffusionProliferationTreatment(T="N",
+    tumor_diffusion_proliferation_source_eq = DiffusionProliferationTreatment(T="N",  # the equation will be solved for "N": the normalized tumor density
                                                                               D=D_value,
                                                                               k_p=kp_symbol,
                                                                               theta=theta_value,
@@ -352,42 +132,31 @@ def run(cfg: ModulusConfig) -> None:
                                                                               alpha_by_beta=alpha_by_beta_value,
                                                                               dose=dose_symbol,
                                                                               dim=3,
-                                                                              time=True)  # the equation will be solved for "N": the normalized tumor density
+                                                                              time=True)  
 
     print(tumor_diffusion_proliferation_source_eq.pprint())
     # set_trace()
     # override defaults
-    cfg.arch.fully_connected.layer_size = 128
+    cfg.arch.fully_connected.layer_size = 64
     cfg.arch.fully_connected.nr_layers = 4
 
     input_keys = [Key("x"), Key("y"), Key("z"), Key("t"), Key("kp"), Key("dose")]
     output_keys = [Key("N")]
 
-    # # Use the custom architecture class
-    # tumor_net = CustomFullyConnectedArch(
-    #     input_keys=input_keys,
-    #     output_keys=output_keys,
-    #     layer_size=cfg.arch.fully_connected.layer_size,
-    #     nr_layers=cfg.arch.fully_connected.nr_layers,
-    # )
-    print("In L362")
     tumor_net = instantiate_arch(
-        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("kp"), Key("dose")],
-        # add "kp" and "t" as additional input (parameterized)
+        input_keys=[Key("x"), Key("y"), Key("z"), Key("t"), Key("kp"), Key("dose")],  # add "kp" and "t" as additional input (parameterized)
         output_keys=[Key("N")],
         cfg=cfg.arch.fully_connected,
     )
 
     t_treatment = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
-    # need to make SF a function of dose
+
     time_window_net = MovingTimeWindowArch(tumor_net,
                                            time_window_size,
                                            alpha=alpha_value,
                                            alpha_by_beta=alpha_by_beta_value,
                                            t_treatment=t_treatment)
 
-    for i in range(4):
-        print("########################################################")
     total_params_tumor_net = count_trainable_params(tumor_net)
     print(f"Total number of trainable parameters for tumor_net: {total_params_tumor_net}")
     print("########################################################")
@@ -417,7 +186,7 @@ def run(cfg: ModulusConfig) -> None:
         lambda_weighting={"normal_gradient_N": 1.0},
         parameterization=param_ranges
     )
-    ic_domain.add_constraint(farfield, "farfield")
+    # ic_domain.add_constraint(farfield, "farfield")
     window_domain.add_constraint(farfield, "farfield")
 
     # interior
@@ -429,7 +198,7 @@ def run(cfg: ModulusConfig) -> None:
         lambda_weighting={"diffusion_proliferation_source_N": 100.0},
         parameterization=param_ranges,
     )
-    ic_domain.add_constraint(interior, "interior")
+    # ic_domain.add_constraint(interior, "interior")
     window_domain.add_constraint(interior, "interior")
 
     # Initial condition specification for the tumor: normalized Gaussian distribution
@@ -446,8 +215,8 @@ def run(cfg: ModulusConfig) -> None:
         # representing the initial tumor using a gaussian distribution centered around a specific location
         # outvar={"N": 0},
         batch_size=cfg.batch_size.initial_condition,  # 10
-        lambda_weighting={"N": 50.0},
-        parameterization={kp_symbol: kp_range, dose_symbol: dose_range, time_symbol: 0}  # fix t=0
+        lambda_weighting={"N": 100.0},
+        parameterization={kp_symbol: kp_range, dose_symbol: dose_range, time_symbol: 0}  # fix t=0 # why are kp, dose and t relevant here?
     )
     ic_domain.add_constraint(initial_condition, "initial_condition")
 

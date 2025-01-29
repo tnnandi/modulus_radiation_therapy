@@ -27,7 +27,7 @@ parameter-specific computer simulations.
 5. Execute [brain_param_kp_dose_time.windowing.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/brain_param_kp_dose_time.windowing.py)  "python " to begin PINN training. 
    - Edit the NN configuration, fixed physical properties, ICs/BCs and the parameterized variables as required.
    - The initial tumor is represented using a gaussian distribution centered around a specific location 
-6. 
+6. Use [inference_kp_dose_time_autoloopstructure.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/inference_kp_dose_time_autoloopstructure.py) to carry out inference and write out vtk file consistent with Paraview naming (varying quantity listed last in the file name)
 Note: Step 4 needs to be carried out within a singularity shell for Nvidia's Modulus and the STL files need to be placed at the approriate locations 
 
 ## Implementation of the governing equations
@@ -75,9 +75,12 @@ $D_T$:  0.125 $mm^2/day$\
 $\theta_T$: 0.1 $day^{-1}$ \
 $\alpha $: 0.035 \
 $\frac{\alpha}{\beta}$: 10 
-Days on which RT is administered: [1, 2, 3, 4, 5, 8, 9, 10, 11]
+Days on which RT is administered: [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19]
 
 $\kappa_T$: 0 to 0.2
 Dose: 0 to 8 $Gy$ included as a discrete event at the beginning of the days on which RT was administered
 
+## Changes in source code for handling the RT dose term and improved convergence
+1. [moving_time_window.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/moving_time_window.py#L106): Edited to multiply the tumor density corresponding to the end of the previous time window by SF before enforcing the constraint to match it with the tumor density at the beginning of the current time window corresponding to the days on which RT was administered.
+2. [trainer.py](https://github.com/tnnandi/modulus_radiation_therapy/blob/main/modulus-sym/examples/brain_RT/trainer.py#L422): Edited for improved IC convergence, using 4 times the max_steps specified in the config file
 
